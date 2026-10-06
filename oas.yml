@@ -1,0 +1,557 @@
+openapi: 3.0.3
+
+info:
+  title: Task Management API
+  description: A small production-style REST API for managing user-owned tasks.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+
+tags:
+  - name: Authentication
+    description: User registration and authentication
+  - name: Tasks
+    description: Authenticated task management
+  - name: Health
+    description: Service health
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+                service: task-management-api
+
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            example:
+              name: John Doe
+              email: john@example.com
+              password: password123
+      responses:
+        "201":
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+              example:
+                id: 1
+                name: John Doe
+                email: john@example.com
+
+        "409":
+          description: A user with this email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: A user with this email already exists
+
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login and obtain a JWT access token
+      description: >
+        OAuth2-compatible password login. The username field contains the
+        user's email address.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  format: email
+                  description: User email address
+                  example: john@example.com
+                password:
+                  type: string
+                  format: password
+                  description: User password
+                  example: password123
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+              example:
+                access_token: eyJhbGciOiJIUzI1NiIs...
+                token_type: bearer
+
+        "401":
+          description: Incorrect email or password
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              example: Bearer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Incorrect email or password
+
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+
+  /tasks:
+    post:
+      tags:
+        - Tasks
+      summary: Create a task
+      operationId: createTask
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskCreate"
+            example:
+              title: Build API
+              description: Finish the task management API
+              status: pending
+      responses:
+        "201":
+          description: Task successfully created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+
+        "401":
+          description: Authentication required
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              example: Bearer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Not authenticated
+
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+
+    get:
+      tags:
+        - Tasks
+      summary: Get current user's tasks
+      operationId: getTasks
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of tasks owned by the authenticated user
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskResponse"
+
+        "401":
+          description: Authentication required
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              example: Bearer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Not authenticated
+
+  /tasks/{task_id}:
+    parameters:
+      - name: task_id
+        in: path
+        required: true
+        description: ID of the task
+        schema:
+          type: integer
+          minimum: 1
+        example: 1
+
+    get:
+      tags:
+        - Tasks
+      summary: Get a task
+      operationId: getTask
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+
+        "401":
+          description: Authentication required
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              example: Bearer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Not authenticated
+
+        "404":
+          description: Task not found or not owned by the current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Task not found
+
+    put:
+      tags:
+        - Tasks
+      summary: Update a task
+      operationId: updateTask
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUpdate"
+            example:
+              title: Build production API
+              description: Finish and test the API
+              status: in_progress
+      responses:
+        "200":
+          description: Task successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+
+        "401":
+          description: Authentication required
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              example: Bearer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Not authenticated
+
+        "404":
+          description: Task not found or not owned by the current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Task not found
+
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+
+    delete:
+      tags:
+        - Tasks
+      summary: Delete a task
+      operationId: deleteTask
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Task successfully deleted
+
+        "401":
+          description: Authentication required
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              example: Bearer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Not authenticated
+
+        "404":
+          description: Task not found or not owned by the current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Task not found
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token obtained from POST /auth/login
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - name
+        - email
+        - password
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: John Doe
+
+        email:
+          type: string
+          format: email
+          example: john@example.com
+
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+          example: password123
+
+    UserResponse:
+      type: object
+      required:
+        - id
+        - name
+        - email
+      properties:
+        id:
+          type: integer
+          example: 1
+
+        name:
+          type: string
+          example: John Doe
+
+        email:
+          type: string
+          format: email
+          example: john@example.com
+
+    TokenResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+      properties:
+        access_token:
+          type: string
+          description: JWT access token
+          example: eyJhbGciOiJIUzI1NiIs...
+
+        token_type:
+          type: string
+          example: bearer
+
+    TaskStatus:
+      type: string
+      enum:
+        - pending
+        - in_progress
+        - completed
+      example: pending
+
+    TaskCreate:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Build API
+
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+          example: Finish the task management API
+
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+
+    TaskUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Build production API
+
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+          example: Finish and test the API
+
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+
+    TaskResponse:
+      type: object
+      required:
+        - id
+        - title
+        - description
+        - status
+        - created_by
+        - created_at
+      properties:
+        id:
+          type: integer
+          example: 1
+
+        title:
+          type: string
+          example: Build API
+
+        description:
+          type: string
+          nullable: true
+          example: Finish the task management API
+
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+
+        created_by:
+          type: integer
+          description: ID of the user who created the task
+          example: 1
+
+        created_at:
+          type: string
+          format: date-time
+          example: 2026-10-05T19:00:00Z
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - service
+      properties:
+        status:
+          type: string
+          example: ok
+
+        service:
+          type: string
+          example: task-management-api
+
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          example: Task not found
+
+    ValidationError:
+      type: object
+      properties:
+        loc:
+          type: array
+          items:
+            oneOf:
+              - type: string
+              - type: integer
+
+        msg:
+          type: string
+
+        type:
+          type: string
+
+    ValidationErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationError"
